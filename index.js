@@ -4,7 +4,7 @@ const axios = require("axios");
 const app = express();
 const PORT = process.env.PORT;
 
-app.get("/", async (req, res) => {
+app.all("/", async (req, res) => {
   const { domain, auth } = req.query;
 
   if (!domain || !auth) {
