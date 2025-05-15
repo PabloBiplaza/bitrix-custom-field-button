@@ -1,62 +1,18 @@
 // Importaciones y configuración
 const express = require("express");
 const axios = require("axios");
-const helmet = require("helmet"); // Añadido para seguridad
-const rateLimit = require("express-rate-limit"); // Para prevenir abusos
-const { body, validationResult } = require('express-validator'); // Validación
 const app = express();
-
-// Configuración de seguridad básica con helmet
-app.use(helmet());
 
 // Configuración de variables de entorno con valores por defecto
 const PORT = process.env.PORT || 3000;
-const NODE_ENV = process.env.NODE_ENV || 'development';
-
-// Límite de tasa para prevenir ataques de fuerza bruta
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100, // límite de 100 solicitudes por ventana
-  standardHeaders: true,
-  legacyHeaders: false
-});
-app.use(limiter);
-
-// Middleware para registrar solicitudes en desarrollo
-if (NODE_ENV === 'development') {
-  app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-    next();
-  });
-}
 
 // Caché para evitar registros duplicados (simulado)
 const registrationCache = new Map();
 
-// Escapar HTML para prevenir XSS
-function escapeHtml(unsafe) {
-  return unsafe
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-// Validar URL
-function isValidUrl(string) {
-  try {
-    new URL(string);
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
 // Ruta principal
 app.all("/", async (req, res) => {
   try {
-    // Configuración de dominio - Más visible para depuración
+    // Configuración de dominio
     const domain = process.env.BITRIX_DOMAIN || "crm.biplaza.es";
     console.log("Usando dominio:", domain);
     const auth = req.query.auth;
@@ -120,40 +76,44 @@ app.all("/", async (req, res) => {
       console.log("Respuesta de Bitrix24:", JSON.stringify(result.data));
       
       // Procesar respuesta
-    if (result.data.result) {
-      // Guardar en caché para evitar reintentos
-      registrationCache.set(cacheKey, true);
-      
-      // Enviar respuesta de éxito
-      return res.send(`
-        <!DOCTYPE html>
-        <html lang="es">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Campo Registrado Correctamente</title>
-          <style>
-            body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-            .success { color: #4CAF50; font-weight: bold; }
-            .info { background: #f9f9f9; padding: 15px; border-radius: 5px; margin-top: 20px; }
-          </style>
-        </head>
-        <body>
-          <h1 class="success">✅ Campo personalizado registrado correctamente</h1>
-          <div class="info">
-            <h2>Pasos siguientes:</h2>
-            <ol>
-              <li>Ve a la configuración de campos personalizados en tu CRM</li>
-              <li>Añade un nuevo campo de tipo "Archivo electrónico" a la entidad deseada</li>
-              <li>Guarda la configuración y comienza a usar el nuevo campo</li>
-            </ol>
-          </div>
-        </body>
-        </html>
-      `);
-    } else {
-      // Error específico de la API de Bitrix
-      return res.status(400).send(`❌ Error al registrar el campo: ${JSON.stringify(result.data)}`);
+      if (result.data.result) {
+        // Guardar en caché para evitar reintentos
+        registrationCache.set(cacheKey, true);
+        
+        // Enviar respuesta de éxito
+        return res.send(`
+          <!DOCTYPE html>
+          <html lang="es">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Campo Registrado Correctamente</title>
+            <style>
+              body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+              .success { color: #4CAF50; font-weight: bold; }
+              .info { background: #f9f9f9; padding: 15px; border-radius: 5px; margin-top: 20px; }
+            </style>
+          </head>
+          <body>
+            <h1 class="success">✅ Campo personalizado registrado correctamente</h1>
+            <div class="info">
+              <h2>Pasos siguientes:</h2>
+              <ol>
+                <li>Ve a la configuración de campos personalizados en tu CRM</li>
+                <li>Añade un nuevo campo de tipo "Archivo electrónico" a la entidad deseada</li>
+                <li>Guarda la configuración y comienza a usar el nuevo campo</li>
+              </ol>
+            </div>
+          </body>
+          </html>
+        `);
+      } else {
+        // Error específico de la API de Bitrix
+        return res.status(400).send(`❌ Error al registrar el campo: ${JSON.stringify(result.data)}`);
+      }
+    } catch (err) {
+      console.error(`Error al hacer la petición a Bitrix24: ${err.message}`, err);
+      return res.status(500).send(`❌ Error al comunicarse con Bitrix24: ${err.message}`);
     }
   } catch (err) {
     console.error(`Error en la ruta principal: ${err.message}`, err);
@@ -291,12 +251,6 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "UP", version: "1.1.0" });
 });
 
-// Manejador global de errores
-app.use((err, req, res, next) => {
-  console.error(`Error no controlado: ${err.message}`, err);
-  res.status(500).send("Error interno del servidor");
-});
-
 // Manejador para rutas no encontradas
 app.use((req, res) => {
   res.status(404).send("Página no encontrada");
@@ -304,7 +258,7 @@ app.use((req, res) => {
 
 // Iniciar el servidor
 const server = app.listen(PORT, () => {
-  console.log(`Servidor activo en puerto ${PORT} (${NODE_ENV})`);
+  console.log(`Servidor activo en puerto ${PORT}`);
 });
 
 // Manejo de cierre controlado
