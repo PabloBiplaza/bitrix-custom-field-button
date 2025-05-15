@@ -5,12 +5,14 @@ const app = express();
 const PORT = process.env.PORT;
 
 app.all("/", async (req, res) => {
-  const { domain, auth } = req.query;
+  // ⚠️ Usamos directamente tu dominio personalizado
+  const domain = "crm.biplaza.es";
+  const auth = req.query.auth;
 
-  if (!domain || !auth) {
+  if (!auth) {
     return res.send(`
-      Para registrar el campo personalizado, accede a esta URL desde una app Bitrix:
-      <pre>https://TU-URL.onrender.com/?domain=TU_DOMINIO&auth=TOKEN</pre>
+      Para registrar el campo personalizado, accede a esta URL con tu token de Bitrix:
+      <pre>https://archivo-electronico.onrender.com/?auth=TU_TOKEN</pre>
     `);
   }
 
