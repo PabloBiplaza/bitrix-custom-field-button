@@ -1,13 +1,21 @@
 {
   "name": "bitrix-custom-field-button",
   "version": "1.0.0",
+  "description": "Registro de un campo personalizado para Bitrix24 que muestra un botón para abrir archivos",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "engines": {
+    "node": ">=16"
+  },
+  "keywords": ["bitrix24", "crm", "custom field"],
+  "author": "Pablo Biplaza",
+  "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.0",
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "axios": "^1.4.0",
     "helmet": "^7.1.0",
     "express-rate-limit": "^7.1.5",
     "express-validator": "^7.0.1"
