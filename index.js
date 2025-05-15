@@ -87,9 +87,9 @@ app.all("/", async (req, res) => {
       `);
     }
     
-    // Validar formato del token (implementación básica)
-    if (!/^[a-zA-Z0-9]{30,50}$/.test(auth)) {
-      return res.status(400).send("❌ El formato del token de autenticación es inválido");
+    // Validar que el token no esté vacío
+    if (!auth || auth.trim() === '') {
+    return res.status(400).send("❌ El token de autenticación no puede estar vacío");
     }
     
     // Verificar si ya se registró este campo (usando caché)
