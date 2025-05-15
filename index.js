@@ -56,9 +56,11 @@ function isValidUrl(string) {
 // Ruta principal
 app.all("/", async (req, res) => {
   try {
-    // Configuración de dominio - Mejor como variable de entorno
+    // Configuración de dominio - Más visible para depuración
     const domain = process.env.BITRIX_DOMAIN || "crm.biplaza.es";
+    console.log("Usando dominio:", domain);
     const auth = req.query.auth;
+    console.log("Token recibido:", auth);
     
     // Si no hay token, mostrar instrucciones
     if (!auth) {
@@ -89,7 +91,7 @@ app.all("/", async (req, res) => {
     
     // Validar que el token no esté vacío
     if (!auth || auth.trim() === '') {
-    return res.status(400).send("❌ El token de autenticación no puede estar vacío");
+      return res.status(400).send("❌ El token de autenticación no puede estar vacío");
     }
     
     // Verificar si ya se registró este campo (usando caché)
@@ -107,13 +109,17 @@ app.all("/", async (req, res) => {
     };
     
     // Registrar el campo en Bitrix24
-    const result = await axios.post(`https://${domain}/rest/userfieldtype.add`, fieldTypeData, {
-      params: { auth },
-      timeout: 10000, // Timeout de 10s
-      validateStatus: status => status >= 200 && status < 500 // Considerar respuestas de error como válidas
-    });
-    
-    // Procesar respuesta
+    console.log(`Enviando petición a: https://${domain}/rest/userfieldtype.add con token: ${auth}`);
+    try {
+      const result = await axios.post(`https://${domain}/rest/userfieldtype.add`, fieldTypeData, {
+        params: { auth },
+        timeout: 10000, // Timeout de 10s
+        validateStatus: status => status >= 200 && status < 500 // Considerar respuestas de error como válidas
+      });
+      
+      console.log("Respuesta de Bitrix24:", JSON.stringify(result.data));
+      
+      // Procesar respuesta
     if (result.data.result) {
       // Guardar en caché para evitar reintentos
       registrationCache.set(cacheKey, true);
