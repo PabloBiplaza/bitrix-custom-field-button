@@ -76,7 +76,20 @@ app.all("/", async (req, res) => {
     
     // Intentar registrar el campo personalizado
     try {
-      // Primer intento: Registrar el tipo de campo para la nueva interfaz SPA
+      // Preparar URL y token de forma segura
+      const fullDomain = domain.startsWith('http') ? domain : `https://${domain}`;
+      const encodedAuth = encodeURIComponent(auth);
+      
+      // Intentar diferentes endpoints de la API para mayor compatibilidad
+      const apiEndpoints = [
+        "/rest/userfieldtype.add.json",  // Añadido .json para mayor compatibilidad
+        "/rest/userfieldtype.add",
+        "/rest/userfield.type.add",
+        "/rest/user.userfield.type.add",
+        "/rest/userfieldconfig.add"
+      ];
+      
+      // Datos del campo personalizado
       const fieldTypeData = {
         USER_TYPE_ID: "archivo_electronico",
         HANDLER: `https://${req.hostname}/render.js`,
@@ -84,16 +97,45 @@ app.all("/", async (req, res) => {
         DESCRIPTION: "Botón que abre un enlace personalizado"
       };
       
-      console.log(`Intentando registrar campo personalizado en: https://${domain}/rest/userfieldtype.add`);
+      console.log(`Intentando registrar campo personalizado en: ${fullDomain}`);
+      console.log(`Usando token: ${auth.substring(0, 4)}...${auth.substring(auth.length - 4)}`);
       
-      const result = await axios.post(`https://${domain}/rest/userfieldtype.add`, fieldTypeData, {
-        params: { auth },
-        timeout: 10000
-      });
+      // Probar todos los endpoints posibles
+      let success = false;
+      let lastResult = null;
       
-      console.log("Respuesta:", JSON.stringify(result.data));
+      for (const endpoint of apiEndpoints) {
+        try {
+          console.log(`Probando endpoint: ${endpoint}`);
+          
+          // Hacer la petición a Bitrix24
+          const result = await axios({
+            method: 'post',
+            url: `${fullDomain}${endpoint}`,
+            params: { auth: encodedAuth },
+            data: fieldTypeData,
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            timeout: 15000
+          });
+          
+          console.log(`Respuesta de ${endpoint}:`, JSON.stringify(result.data));
+          lastResult = result.data;
+          
+          if (result.data && result.data.result) {
+            success = true;
+            break;
+          }
+        } catch (endpointError) {
+          console.error(`Error con endpoint ${endpoint}:`, endpointError.message);
+          if (endpointError.response) {
+            console.error("Detalles:", JSON.stringify(endpointError.response.data));
+          }
+        }
+      }
       
-      if (result.data.result) {
+      if (success) {
         return res.send(`
           <!DOCTYPE html>
           <html lang="es">
@@ -194,19 +236,33 @@ BX.ready(function() {
         `);
       }
     } catch (error) {
-      console.error("Error:", error.message);
+      console.error("Error de comunicación:", error.message);
+      
+      // Preparar mensaje de error detallado
+      let errorDetails = "Request failed";
+      let statusCode = error.response ? error.response.status : "desconocido";
+      let errorData = "No hay datos adicionales";
+      
+      if (error.response) {
+        errorDetails = `Request failed with status code ${error.response.status}`;
+        errorData = JSON.stringify(error.response.data || {}, null, 2);
+      }
+      
       return res.status(500).send(`
         <!DOCTYPE html>
         <html lang="es">
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Error en la Comunicación</title>
+          <title>Error en la comunicación con Bitrix24</title>
           <style>
             body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
             .error { color: #e53935; }
             .error-details { background: #ffebee; padding: 15px; border-radius: 5px; margin-top: 20px; border-left: 4px solid #e53935; }
             .solution { background: #e8f5e9; padding: 15px; border-radius: 5px; margin-top: 20px; border-left: 4px solid #4CAF50; }
+            pre { background: #f0f0f0; padding: 10px; border-radius: 3px; overflow-x: auto; white-space: pre-wrap; }
+            .alternative { background: #e3f2fd; padding: 15px; border-radius: 5px; margin-top: 20px; }
+            .code-block { background: #f5f5f5; padding: 15px; border-radius: 5px; margin-top: 10px; white-space: pre-wrap; font-family: monospace; }
           </style>
         </head>
         <body>
@@ -214,23 +270,74 @@ BX.ready(function() {
           
           <div class="error-details">
             <h2>Detalles del error:</h2>
-            <p>${error.message}</p>
+            <p><strong>Mensaje:</strong> ${errorDetails}</p>
+            <p><strong>Código de estado:</strong> ${statusCode}</p>
+            <p><strong>Dominio utilizado:</strong> ${domain}</p>
+            <p><strong>Token (parcial):</strong> ${auth ? auth.substring(0, 4) + '...' + auth.substring(auth.length - 4) : 'No proporcionado'}</p>
+            
+            <p><strong>Datos adicionales:</strong></p>
+            <pre>${errorData}</pre>
+            
             <p><strong>Posibles causas:</strong></p>
             <ul>
               <li>El token proporcionado no es válido o ha expirado</li>
               <li>El dominio de Bitrix24 es incorrecto</li>
-              <li>El token no tiene los permisos necesarios</li>
+              <li>El token no tiene los permisos necesarios (userfield, crm)</li>
               <li>Hay problemas de red o conexión</li>
+              <li>La API de Bitrix24 ha cambiado o requiere una autenticación diferente</li>
             </ul>
           </div>
           
           <div class="solution">
             <h2>Soluciones:</h2>
             <ol>
-              <li>Verifica que el token sea correcto y tenga permisos suficientes</li>
-              <li>Asegúrate de proporcionar el dominio correcto (ej: crm.biplaza.es)</li>
-              <li>Genera un nuevo token con todos los permisos necesarios</li>
-              <li>Contacta con el administrador de Bitrix24 si el problema persiste</li>
+              <li><strong>Usa un webhook con permisos completos:</strong>
+                <ul>
+                  <li>Ve a tu Bitrix24 → Configuración → Webhooks entrantes</li>
+                  <li>Crea un nuevo webhook con <strong>TODOS los permisos</strong> (especialmente "userfield" y "crm")</li>
+                  <li>Copia el token generado y úsalo en la URL</li>
+                </ul>
+              </li>
+              <li><strong>Usa la URL correcta:</strong>
+                <p>Asegúrate de que la URL tenga este formato:</p>
+                <div class="code-block">https://${req.hostname}/?auth=TU_TOKEN&domain=crm.biplaza.es</div>
+              </li>
+              <li><strong>Verifica el dominio:</strong>
+                <p>El dominio debe ser exactamente como aparece en tu navegador (sin https:// al inicio):</p>
+                <div class="code-block">domain=crm.biplaza.es</div>
+              </li>
+            </ol>
+          </div>
+          
+          <div class="alternative">
+            <h2>Alternativa: Solución manual</h2>
+            <p>Si continúas teniendo problemas, puedes implementar una solución manual usando JavaScript personalizado en Bitrix24:</p>
+            <ol>
+              <li>Crea un campo personalizado regular de tipo "Cadena" en CRM → Compañías</li>
+              <li>Dale un nombre que comience con "UF_ARCHIVO_" (ejemplo: UF_ARCHIVO_CONTRATO)</li>
+              <li>Pide a tu administrador que añada este JavaScript a la configuración de Bitrix24:</li>
+              <pre>
+BX.ready(function() {
+  function transformarCamposArchivo() {
+    document.querySelectorAll('input[name^="UF_ARCHIVO_"]').forEach(function(input) {
+      if (!input.hasAttribute('data-procesado')) {
+        input.setAttribute('data-procesado', 'true');
+        var btn = document.createElement('a');
+        btn.href = input.value || '#';
+        btn.target = '_blank';
+        btn.innerHTML = '&lt;button type="button" style="margin-left:10px;padding:5px 10px;background:#2fc6f6;color:white;border:none;border-radius:4px;"&gt;Archivo&lt;/button&gt;';
+        
+        input.addEventListener('input', function() {
+          btn.href = this.value || '#';
+        });
+        
+        input.parentNode.appendChild(btn);
+      }
+    });
+  }
+  
+  setInterval(transformarCamposArchivo, 1000);
+});</pre>
             </ol>
           </div>
         </body>
